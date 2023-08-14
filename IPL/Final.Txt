@@ -1,0 +1,156 @@
+--------------------------------------------------------------------------------------------------------------
+----- To Create Table(IPL_Ball) -----
+
+CREATE TABLE IPL_Ball (
+    id INT,
+    inning INT,
+    over INT,
+    ball INT,
+    batsman VARCHAR(255),
+    non_striker VARCHAR(255),
+    bowler VARCHAR(255),
+    batsman_runs INT,
+    extra_runs INT,
+    total_runs INT,
+    is_wicket INT,
+    dismissal_kind VARCHAR(50),
+    player_dismissed VARCHAR(255),
+    fielder VARCHAR(255),
+    extras_type VARCHAR(50),
+    batting_team VARCHAR(255),
+    bowling_team VARCHAR(255)
+);
+----- To Create Table(IPL_Matches) -----
+CREATE TABLE IPL_Matches (
+    id INT,
+    city VARCHAR(255),
+    date DATE,
+    player_of_match VARCHAR(255),
+    venue VARCHAR(255),
+    neutral_venue INT,
+    team1 VARCHAR(255),
+    team2 VARCHAR(255),
+    toss_winner VARCHAR(255),
+    toss_decision VARCHAR(10),
+    winner VARCHAR(255),
+    result VARCHAR(20),
+    result_margin INT,
+    eliminator VARCHAR(10),
+    method VARCHAR(10),
+    umpire1 VARCHAR(255),
+    umpire2 VARCHAR(255)
+);
+----- Import data into IPL_Ball table -----
+COPY IPL_Ball FROM 'C:\Program Files\PostgreSQL\15\data\Internshala\IPL_Ball.csv' DELIMITER ',' CSV HEADER;
+---------------------------------------------------------------------------------------------------------------
+//ERROR:  date/time field value out of range: "18-04-2008"
+HINT:  Perhaps you need a different "datestyle" setting.
+CONTEXT:  COPY ipl_matches, line 2, column date: "18-04-2008" 
+SQL state: 22008//
+-*-https://stackoverflow.com/questions/34760758/perhaps-you-need-a-different-datestyle-setting
+
+Fix:  SET datestyle TO 'ISO,dmy';
+---------------------------------------------------------------------------------------------------------------
+----- Import data into IPL_Matches table -----
+COPY IPL_Matches FROM 'C:\Program Files\PostgreSQL\15\data\Internshala\IPL_Matches.csv' DELIMITER ',' CSV HEADER;
+-------------------------------------------------- Batters --------------------------------------------------
+----- Strike Rate -----
+
+SELECT batsman,
+       SUM(batsman_runs) AS total_runs,
+       COUNT(CASE WHEN extras_type != 'wides' THEN ball END) AS total_balls,
+       ROUND((SUM(batsman_runs) * 100.0 / COUNT(CASE WHEN extras_type != 'wides' THEN ball END)), 2) AS strike_rate
+FROM IPL_Ball
+GROUP BY batsman
+HAVING COUNT(CASE WHEN extras_type != 'wides' THEN ball END) >= 500
+ORDER BY strike_rate DESC
+LIMIT 10;
+
+----- Good Average -----
+
+SELECT batsman,
+       COUNT(DISTINCT EXTRACT(YEAR FROM ipl_matches.date)) AS seasons_played,
+       COUNT(*) AS innings_played,
+       SUM(batsman_runs) AS total_runs,
+       SUM(is_wicket) AS times_dismissed,
+       SUM(batsman_runs) / NULLIF(SUM(is_wicket), 0) AS batting_average
+FROM IPL_Ball
+JOIN IPL_Matches ON IPL_Ball.id = IPL_Matches.id
+GROUP BY batsman
+HAVING COUNT(DISTINCT EXTRACT(YEAR FROM ipl_matches.date)) > 2 AND SUM(is_wicket) > 0
+ORDER BY batting_average DESC
+LIMIT 10;
+
+----- Hard-hitting players -----
+
+SELECT batsman,
+       COUNT(DISTINCT EXTRACT(YEAR FROM ipl_matches.date)) AS seasons_played,
+       SUM(CASE WHEN batsman_runs = 4 THEN 1 ELSE 0 END) AS fours_count,
+       SUM(CASE WHEN batsman_runs = 6 THEN 1 ELSE 0 END) AS sixes_count,
+       SUM(batsman_runs) AS total_runs,
+       (SUM(CASE WHEN batsman_runs = 4 THEN 1 ELSE 0 END) * 4 + SUM(CASE WHEN batsman_runs = 6 THEN 1 ELSE 0 END) * 6) AS boundary_runs,
+       CONCAT(ROUND(((SUM(CASE WHEN batsman_runs = 4 THEN 1 ELSE 0 END) * 4 + SUM(CASE WHEN batsman_runs = 6 THEN 1 ELSE 0 END) * 6) * 100.0) / NULLIF(SUM(batsman_runs), 0), 0), '%') AS boundary_percentage
+FROM IPL_Ball
+JOIN IPL_Matches ON IPL_Ball.id = IPL_Matches.id
+GROUP BY batsman
+HAVING COUNT(DISTINCT EXTRACT(YEAR FROM ipl_matches.date)) > 2
+ORDER BY boundary_percentage DESC
+LIMIT 10;
+
+-------------------------------------------------- Bowlers --------------------------------------------------
+----- Good Economy -----
+
+SELECT bowler, 
+round((SUM(total_runs) / (count(bowler)/6.0)),2) AS economy       
+FROM ipl_ball 
+GROUP BY bowler
+HAVING COUNT(bowler) >= 500  
+ORDER BY economy
+LIMIT 10;
+
+ ----- Strike Rate (Bowlers) -----
+
+ SELECT bowler,
+       COUNT(ball) AS total_balls_bowled,
+       SUM(is_wicket) AS total_wickets_taken,
+       ROUND(COUNT(ball) / NULLIF(SUM(is_wicket), 0), 1) AS strike_rate
+FROM IPL_Ball
+GROUP BY bowler
+HAVING COUNT(ball) >= 500
+ORDER BY strike_rate DESC
+LIMIT 10;
+
+----- All-Rounders -----
+
+SELECT
+    batsman AS all_rounder,
+    ROUND((SUM(batsman_runs) * 1.0 / COUNT(ball) * 100), 2) AS bats_strike_rate,
+    b.bowl_strike_rate
+FROM ipl_ball AS a
+INNER JOIN (
+    SELECT
+        bowler,
+        COUNT(bowler) AS balls,
+        SUM(is_wicket) AS total_wicket,
+        ROUND((COUNT(bowler) * 1.0 / SUM(is_wicket)), 2) AS bowl_strike_rate
+    FROM ipl_ball
+    GROUP BY bowler
+    HAVING COUNT(bowler) > 300
+    ORDER BY bowl_strike_rate ASC
+) AS b ON a.batsman = b.bowler
+WHERE NOT extras_type = 'wides'
+GROUP BY batsman, b.bowl_strike_rate
+HAVING COUNT(ball) >= 500
+ORDER BY bats_strike_rate DESC, b.bowl_strike_rate DESC
+LIMIT 10;
+
+----- Wicketkeeper -----
+
+SELECT fielder AS wicketkeeper,
+COUNT(*) AS stumpings_count
+FROM IPL_Ball
+WHERE dismissal_kind = 'stumped' AND fielder IS NOT NULL
+GROUP BY fielder
+ORDER BY stumpings_count DESC
+LIMIT 1;
+--------------------------------------------------------------------------------------------------------------

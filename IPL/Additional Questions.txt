@@ -1,0 +1,94 @@
+--------------------------------------------------------------------------------------------------------------
+1. Get the count of cities that have hosted an IPL match
+
+SELECT COUNT(DISTINCT city) AS count_of_cities
+FROM IPL_Matches;
+--------------------------------------------------------------------------------------------------------------
+2. Create table deliveries_v02 with all the columns of the table ‘deliveries’ and an additional
+column ball_result containing values boundary, dot or other depending on the total_run
+
+CREATE TABLE deliveries_v02 AS
+SELECT *,
+       CASE 
+           WHEN total_runs >= 4 THEN 'boundary'
+           WHEN total_runs = 0 THEN 'dot'
+           ELSE 'other'
+       END AS ball_result
+FROM IPL_Ball;
+--------------------------------------------------------------------------------------------------------------
+3. Write a query to fetch the total number of boundaries and dot balls from the
+deliveries_v02 table.
+
+SELECT
+    COUNT(CASE WHEN ball_result = 'boundary' THEN 1 END) AS total_boundaries,
+    COUNT(CASE WHEN ball_result = 'dot' THEN 1 END) AS total_dot_balls
+FROM deliveries_v02;
+--------------------------------------------------------------------------------------------------------------
+4. Write a query to fetch the total number of boundaries scored by each team from the
+deliveries_v02 table and order it in descending order of the number of boundaries
+scored
+
+SELECT batting_team, 
+       COUNT(CASE WHEN ball_result = 'boundary' THEN 1 END) AS total_boundaries
+FROM deliveries_v02
+GROUP BY batting_team
+ORDER BY total_boundaries DESC;
+
+--------------------------------------------------------------------------------------------------------------
+5. Write a query to fetch the total number of dot balls bowled by each team and order it in
+descending order of the total number of dot balls bowled.
+
+SELECT bowling_team,
+       COUNT(CASE WHEN ball_result = 'dot' THEN 1 END) AS total_dot_balls
+FROM deliveries_v02
+GROUP BY bowling_team
+ORDER BY total_dot_balls DESC;
+--------------------------------------------------------------------------------------------------------------
+6. Write a query to fetch the total number of dismissals by dismissal kinds where dismissal
+kind is not NA
+
+SELECT dismissal_kind, 
+       COUNT(*) AS total_dismissals
+FROM deliveries_v02
+WHERE dismissal_kind <> 'NA'
+GROUP BY dismissal_kind;
+--------------------------------------------------------------------------------------------------------------
+7. Write a query to get the top 5 bowlers who conceded maximum extra runs from the
+deliveries table
+
+SELECT bowler, 
+       SUM(extra_runs) AS total_extra_runs
+FROM IPL_Ball
+GROUP BY bowler
+ORDER BY total_extra_runs DESC
+LIMIT 5;
+--------------------------------------------------------------------------------------------------------------
+8. Write a query to create a table named deliveries_v03 with all the columns of
+deliveries_v02 table and two additional column (named venue and match_date) of venue
+and date from table matches
+
+CREATE TABLE deliveries_v03 AS
+SELECT dv02.*, im.venue, im.date AS match_date
+FROM deliveries_v02 AS dv02
+JOIN IPL_Matches AS im ON dv02.id = im.id;
+--------------------------------------------------------------------------------------------------------------
+9. Write a query to fetch the total runs scored for each venue and order it in the descending
+order of total runs scored.
+
+SELECT venue,
+       SUM(batsman_runs) AS total_runs_scored
+FROM deliveries_v03
+GROUP BY venue
+ORDER BY total_runs_scored DESC;
+--------------------------------------------------------------------------------------------------------------
+10. Write a query to fetch the year-wise total runs scored at Eden Gardens and order it in the
+descending order of total runs scored.
+
+SELECT EXTRACT(YEAR FROM match_date) AS year,
+       venue,
+       SUM(batsman_runs) AS total_runs_scored
+FROM deliveries_v03
+WHERE venue = 'Eden Gardens'
+GROUP BY year, venue
+ORDER BY total_runs_scored DESC;
+-------------------------------------------------------------------------------------------------------------
